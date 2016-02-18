@@ -327,8 +327,13 @@ fn _expired(timestamp: Timestamp, now: Timestamp) -> bool {
 pub fn compute_weight<K: HasWeight, V: HasWeight>(key: &K, value: &V) -> Weight {
     // this isn't perfect because it ignores some hashtable and btreeset
     // overhead, but it's a pretty good guess at the memory usage of an entry
-    (3 * key.weight() + value.weight() + mem::size_of::<Weight>() + mem::size_of::<Timestamp>() +
-     mem::size_of::<Option<Timestamp>>())
+    let mut sum = 0;
+    sum += 3 * key.weight();
+    sum += value.weight();
+    sum += mem::size_of::<Weight>();
+    sum += mem::size_of::<Timestamp>();
+    sum += mem::size_of::<Option<Timestamp>>();
+    sum
 }
 
 impl HasWeight for Vec<u8> {

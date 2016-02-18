@@ -68,13 +68,14 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
                 // cleaup process (thereby keeping our reads fast and paying the
                 // cost on writes instead)
                 Option::None
-            },
+            }
 
             Some(entry) => {
                 // we found it and it hasn't expired. Since it's being used now
                 // we need to update its position in the LRU
                 let k2 = Arc::new(key.clone());
-                if ((*entry).used) != now { // only update it if the value would change
+                if ((*entry).used) != now {
+                    // only update it if the value would change
                     let old_lru_key = ((*entry).used, k2.clone());
                     self.lru.remove(&old_lru_key);
 
@@ -93,11 +94,10 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
         self.get_full_entry(key, now).map(|entry| &entry.data)
     }
 
-    pub fn set(&mut self, key: K, value: V,
-               expires: Option<Timestamp>, now: Timestamp) -> bool {
+    pub fn set(&mut self, key: K, value: V, expires: Option<Timestamp>, now: Timestamp) -> bool {
         if expired(expires, now) {
             // if it's already expired there's no need to store it
-            return false
+            return false;
         }
 
         // if it's already in here, we need to get rid of it
@@ -114,8 +114,12 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
         let capacity = self.capacity;
         self.deweight(capacity - weight, now);
 
-        let entry = LruEntry{data: value,
-            expires: expires, weight: weight, used: now};
+        let entry = LruEntry {
+            data: value,
+            expires: expires,
+            weight: weight,
+            used: now,
+        };
 
         let k2 = Arc::new(key.clone());
 
@@ -156,7 +160,7 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
             None => {
                 // just bail, it was never in here anyway
                 return false;
-            },
+            }
             Some(full_entry) => {
                 // change it in-place
                 let old_expires = (*full_entry).expires;
@@ -168,15 +172,16 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
         };
 
         // update our data structures
-        self._touch(key,
-                    old_expires, expires,
-                    old_used, now);
+        self._touch(key, old_expires, expires, old_used, now);
         true
     }
 
-    fn _touch(&mut self, key: &K,
-              old_expires: Option<Timestamp>, new_expires: Option<Timestamp>,
-              old_used: Timestamp, now: Timestamp) {
+    fn _touch(&mut self,
+              key: &K,
+              old_expires: Option<Timestamp>,
+              new_expires: Option<Timestamp>,
+              old_used: Timestamp,
+              now: Timestamp) {
 
         let k2 = Arc::new((*key).clone());
 
@@ -266,7 +271,7 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
 
         if let Some(key_ref) = expired_key {
             self.delete(&*key_ref);
-            return
+            return;
         }
 
         // otherwise we have to use the LRU
@@ -285,7 +290,7 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
 
         if let Some(key_ref) = lru_key {
             self.delete(&*key_ref);
-            return
+            return;
         }
 
         unreachable!("there's nothing on the LRU?");
@@ -311,7 +316,7 @@ fn expired(timestamp: Option<Timestamp>, now: Timestamp) -> bool {
         Some(ts) if _expired(ts, now) => {
             true
         }
-        _ => false
+        _ => false,
     }
 }
 
@@ -322,11 +327,8 @@ fn _expired(timestamp: Timestamp, now: Timestamp) -> bool {
 pub fn compute_weight<K: HasWeight, V: HasWeight>(key: &K, value: &V) -> Weight {
     // this isn't perfect because it ignores some hashtable and btreeset
     // overhead, but it's a pretty good guess at the memory usage of an entry
-    (3*key.weight()
-     + value.weight()
-     + mem::size_of::<Weight>()
-     + mem::size_of::<Timestamp>()
-     + mem::size_of::<Option<Timestamp>>())
+    (3 * key.weight() + value.weight() + mem::size_of::<Weight>() + mem::size_of::<Timestamp>() +
+     mem::size_of::<Option<Timestamp>>())
 }
 
 impl HasWeight for Vec<u8> {
@@ -340,9 +342,9 @@ mod tests {
     use super::*;
 
     const NOW: Timestamp = 100;
-    const FUTURE: Timestamp = NOW+1;
-    const FUTURE2: Timestamp = NOW+2;
-    const PAST: Timestamp = NOW-1;
+    const FUTURE: Timestamp = NOW + 1;
+    const FUTURE2: Timestamp = NOW + 2;
+    const PAST: Timestamp = NOW - 1;
     const CAPACITY: Weight = 200;
 
     #[test]
@@ -376,7 +378,7 @@ mod tests {
 
         store.set(b("foo1"), b("data"), None, PAST);
 
-        let big = make_big(CAPACITY*2);
+        let big = make_big(CAPACITY * 2);
 
         store.set(b("foo2"), big, None, PAST);
 
@@ -428,14 +430,14 @@ mod tests {
     }
 
 
-    fn make_store() -> LruCache<Vec<u8>, Vec<u8>>{
+    fn make_store() -> LruCache<Vec<u8>, Vec<u8>> {
         let store = LruCache::new(CAPACITY);
         store
     }
 
     fn make_big(size: usize) -> Vec<u8> {
         let mut big = Vec::new();
-        for x in 0..size*2 {
+        for x in 0..size * 2 {
             big.push(x as u8);
         }
         big

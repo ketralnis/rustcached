@@ -3,7 +3,7 @@ use std::sync::{Arc, Mutex};
 use std::net::{TcpListener, TcpStream};
 
 use std::io;
-use std::io::{Read,Write};
+use std::io::{Read, Write};
 
 use store::Store;
 use store::Response;
@@ -14,8 +14,7 @@ use parser;
 pub const NAME: &'static [u8] = b"rustcache";
 pub const VERSION: &'static [u8] = b"0.1.0";
 
-fn format_response(response: Response, socket: &mut Write)
-        -> io::Result<()> {
+fn format_response(response: Response, socket: &mut Write) -> io::Result<()> {
     match response {
         Response::DataResponse{responses} => {
             for response in &responses {
@@ -30,7 +29,7 @@ fn format_response(response: Response, socket: &mut Write)
                 try!(socket.write(b"\r\n"));
             }
             try!(socket.write(b"END\r\n"));
-        },
+        }
         Response::GetsResponse{responses} => {
             for response in &responses {
                 try!(socket.write(b"VALUE "));
@@ -47,43 +46,43 @@ fn format_response(response: Response, socket: &mut Write)
                 try!(socket.write(b"\r\n"));
             }
             try!(socket.write(b"END\r\n"));
-        },
+        }
         Response::IncrResponse{value} => {
             try!(socket.write(format!("{}", value).as_bytes()));
             try!(socket.write(b"\r\n"));
-        },
+        }
         Response::DeletedResponse => {
             try!(socket.write(b"DELETED\r\n"));
-        },
+        }
         Response::TouchedResponse => {
             try!(socket.write(b"TOUCHED\r\n"));
-        },
+        }
         Response::OkResponse => {
             try!(socket.write(b"OK\r\n"));
-        },
+        }
         Response::StoredResponse => {
             try!(socket.write(b"STORED\r\n"));
-        },
+        }
         Response::NotStoredResponse => {
             try!(socket.write(b"NOT_STORED\r\n"));
-        },
+        }
         Response::ExistsResponse => {
             try!(socket.write(b"EXISTS\r\n"));
-        },
+        }
         Response::NotFoundResponse => {
             try!(socket.write(b"NOT_FOUND\r\n"));
-        },
+        }
         Response::ErrorResponse => {
             try!(socket.write(b"ERROR\r\n"));
-        },
+        }
         Response::ClientErrorResponse{message} => {
             try!(socket.write(b"CLIENT_ERROR "));
             try!(socket.write(message.as_bytes()));
             try!(socket.write(b"\r\n"));
-        },
+        }
         Response::TooBig => {
             try!(socket.write(b"SERVER_ERROR object too large for cache"));
-        },
+        }
         Response::VersionResponse => {
             try!(socket.write(b"VERSION "));
             try!(socket.write(NAME));
@@ -99,7 +98,9 @@ fn format_response(response: Response, socket: &mut Write)
 }
 
 fn client(locked_store: Arc<Mutex<Store>>, mut socket: TcpStream, verbose: bool) {
-    if verbose {println!("client connect"); }
+    if verbose {
+        println!("client connect");
+    }
 
     // this buffer on our stack is the largest amount that we can read from the
     // wire in a single go. bigger means fewer copies but more memory used per
@@ -117,13 +118,17 @@ fn client(locked_store: Arc<Mutex<Store>>, mut socket: TcpStream, verbose: bool)
     loop {
         match socket.read(&mut buff) {
             Err(err) => {
-                if verbose { println!("client err: {:?}", err) }
+                if verbose {
+                    println!("client err: {:?}", err)
+                }
                 return;
-            },
+            }
             Ok(size) if size == 0 => {
-                if verbose { println!("client disconnect"); }
+                if verbose {
+                    println!("client disconnect");
+                }
                 return; // eof
-            },
+            }
             Ok(size) => {
                 parse_state.extend_from_slice(&buff[0..size]);
 
@@ -131,21 +136,21 @@ fn client(locked_store: Arc<Mutex<Store>>, mut socket: TcpStream, verbose: bool)
                 // client is done receiving all of our bits!
 
                 match parser::parse_command(&parse_state.to_vec()) { // TODO copy
-                    parser::IResult::Done(remaining, command_config) => {                        
+                    parser::IResult::Done(remaining, command_config) => {
                         let CommandConfig {should_reply, command} = command_config;
 
                         let response = match command {
                             ServerCommand::Quit => {
                                 // no response, just disconnect them and quit
                                 return;
-                            },
+                            }
                             ServerCommand::Bad(text) => {
                                 if verbose {
                                     println!("bad client command: {:?}",
                                              String::from_utf8_lossy(text))
                                 }
                                 Response::ErrorResponse
-                            },
+                            }
                             _ => {
                                 // all others must be sent to the store
                                 let mut unlocked_store = locked_store.lock().unwrap();
@@ -156,7 +161,9 @@ fn client(locked_store: Arc<Mutex<Store>>, mut socket: TcpStream, verbose: bool)
                             match format_response(response, &mut socket) {
                                 Result::Ok(_) => (),
                                 Result::Err(err) => {
-                                    if verbose { println!("client write error {:?}", err); }
+                                    if verbose {
+                                        println!("client write error {:?}", err);
+                                    }
                                     // TODO right now we just disconnect them
                                     return;
                                 }
@@ -167,7 +174,9 @@ fn client(locked_store: Arc<Mutex<Store>>, mut socket: TcpStream, verbose: bool)
                         parse_state.extend_from_slice(&remaining);
                     }
                     parser::IResult::Error(err) => {
-                        if verbose { println!("parser error? {:?}", err); }
+                        if verbose {
+                            println!("parser error? {:?}", err);
+                        }
                         // TODO can we recover from this?
                         return;
                     }
@@ -175,15 +184,13 @@ fn client(locked_store: Arc<Mutex<Store>>, mut socket: TcpStream, verbose: bool)
                         continue;
                     }
                 }
-            },
+            }
         }
     }
 }
 
 fn start_client(locked_store: Arc<Mutex<Store>>, socket: TcpStream, verbose: bool) {
-    spawn(move || {
-        client(locked_store, socket, verbose)
-    });
+    spawn(move || client(locked_store, socket, verbose));
 }
 
 pub fn start(port: u16, capacity: usize, verbose: bool) {
@@ -192,13 +199,15 @@ pub fn start(port: u16, capacity: usize, verbose: bool) {
     let uri = format!("0.0.0.0:{}", port);
     let uri: &str = &uri;
 
-    if verbose { println!("starting server"); }
+    if verbose {
+        println!("starting server");
+    }
 
     for client_stream in TcpListener::bind(&uri).unwrap().incoming() {
         match client_stream {
             Ok(client_stream) => {
                 start_client(locked_store.clone(), client_stream, verbose);
-            },
+            }
             Err(err) => {
                 println!("client accept error: {:?}", err);
             }

@@ -26,7 +26,7 @@ fn unwrap_noreply(tag: Option<&[u8]>) -> bool {
     match tag {
         Some(b"noreply") => false,
         Some(_) => panic!(format!("can't unwrap noreply tag {:?}", tag)),
-        None => true
+        None => true,
     }
 }
 
@@ -68,7 +68,7 @@ fn map_setter_name(res: &[u8]) -> SetterType {
         b"prepend" => SetterType::Prepend,
         b"replace" => SetterType::Replace,
         b"append" => SetterType::Append,
-        _ => panic!(format!("unknown setter mapped? {:?}", res))
+        _ => panic!(format!("unknown setter mapped? {:?}", res)),
     }
 }
 
@@ -153,7 +153,7 @@ fn map_getter_name(res: &[u8]) -> GetterType {
     match res {
         b"get" => GetterType::Get,
         b"gets" => GetterType::Gets,
-        _ => panic!(format!("unknown getter mapped? {:?}", res))
+        _ => panic!(format!("unknown getter mapped? {:?}", res)),
     }
 }
 
@@ -231,7 +231,7 @@ fn map_incr_name(res: &[u8]) -> IncrementerType {
     match res {
         b"incr" => IncrementerType::Incr,
         b"decr" => IncrementerType::Decr,
-        _ => panic!(format!("unknown getter mapped? {:?}", res))
+        _ => panic!(format!("unknown getter mapped? {:?}", res)),
     }
 }
 
@@ -361,12 +361,12 @@ pub fn parse_size(size_str: &str) -> Option<usize> {
             let mult = match suffix {
                 None | Some("b") | Some("") => 1,
                 Some("k") => 1024,
-                Some("m") => 1024*1024,
-                Some("g") => 1024*1024*1024,
-                Some("t") => 1024*1024*1024*1024,
-                bad_mult => unreachable!(format!("weird suffix {:?}", bad_mult))
+                Some("m") => 1024 * 1024,
+                Some("g") => 1024 * 1024 * 1024,
+                Some("t") => 1024 * 1024 * 1024 * 1024,
+                bad_mult => unreachable!(format!("weird suffix {:?}", bad_mult)),
             };
-            Some(number*mult)
+            Some(number * mult)
         }
     }
 }

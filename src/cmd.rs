@@ -19,7 +19,7 @@ macro_rules! println_stderr(
 
 pub fn main() {
     let mut port = 11211;
-    let mut capacity = 64*1024*1024;
+    let mut capacity = 64 * 1024 * 1024;
     let mut verbose = false;
 
     let args: Vec<String> = env::args().collect();
@@ -38,7 +38,9 @@ pub fn main() {
     };
 
     let matches = match opts.parse(&args[1..]) {
-        Ok(m) => { m }
+        Ok(m) => {
+            m
+        }
         Err(f) => {
             println_stderr!("{}", f);
             return print_usage_and_die(1);

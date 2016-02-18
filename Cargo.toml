@@ -1,0 +1,10 @@
+[package]
+name = "rustcached"
+version = "0.1.0"
+authors = ["David King <dking@ketralnis.com>"]
+
+[dependencies]
+nom = "~1.2.0"
+time = "0.1"
+getopts = "0.2"
+regex = "0.1"

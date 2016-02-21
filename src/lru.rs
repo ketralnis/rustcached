@@ -15,7 +15,7 @@ type LruEntryExpires<K> = (Timestamp, Arc<K>);
 
 #[derive(Debug)]
 pub struct LruCache<K: HasWeight + Ord + Hash + Clone, V: HasWeight> {
-    map: HashMap<K, LruEntry<V>>,
+    map: HashMap<Arc<K>, LruEntry<K, V>>,
     lru: BTreeSet<LruEntryUsed<K>>,
     expires: BTreeSet<LruEntryExpires<K>>,
     capacity: Weight,
@@ -27,8 +27,9 @@ pub trait HasWeight {
 }
 
 #[derive(Debug)]
-pub struct LruEntry<V> {
+pub struct LruEntry<K, V> {
     pub data: V,
+    pub key: Arc<K>,
     used: Timestamp,
     pub expires: Option<Timestamp>,
     weight: Weight,
@@ -52,13 +53,13 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
         self.weight = 0;
     }
 
-    pub fn get_full_entry(&mut self, key: &K, now: Timestamp) -> Option<&LruEntry<V>> {
+    pub fn get_full_entry(&mut self, key: &K, now: Timestamp) -> Option<&LruEntry<K, V>> {
         let entry = self._get_full_entry(key, now);
         entry.map(|e| &*e)
     }
 
-    fn _get_full_entry(&mut self, key: &K, now: Timestamp) -> Option<&mut LruEntry<V>> {
-        match self.map.get_mut(&key) {
+    fn _get_full_entry(&mut self, key: &K, now: Timestamp) -> Option<&mut LruEntry<K, V>> {
+        match self.map.get_mut(key) {
             None => Option::None,
 
             Some(ref entry) if expired((*entry).expires, now) => {
@@ -73,15 +74,21 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
             Some(entry) => {
                 // we found it and it hasn't expired. Since it's being used now
                 // we need to update its position in the LRU
-                let k2 = Arc::new(key.clone());
+
+                // use the key we found inside of the structure instead of the
+                // one that was passed in, so we can save memory by just
+                // incrementing the reference count on that one instead of
+                // copying it
+                let inner_key = (*entry).key.clone();
+
                 if ((*entry).used) != now {
                     // only update it if the value would change
-                    let old_lru_key = ((*entry).used, k2.clone());
+                    let old_lru_key = ((*entry).used, inner_key.clone());
                     self.lru.remove(&old_lru_key);
 
                     entry.used = now;
 
-                    let new_lru_key = (now, k2.clone());
+                    let new_lru_key = (now, inner_key.clone());
                     self.lru.insert(new_lru_key);
                 }
 
@@ -114,16 +121,17 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
         let capacity = self.capacity;
         self.deweight(capacity - weight, now);
 
+        let k2 = Arc::new(key.clone());
+
         let entry = LruEntry {
+            key: k2.clone(),
             data: value,
             expires: expires,
             weight: weight,
             used: now,
         };
 
-        let k2 = Arc::new(key.clone());
-
-        self.map.insert(key, entry);
+        self.map.insert(k2.clone(), entry);
         self.weight += weight;
 
         let lru_key = (now, k2.clone());
@@ -156,53 +164,52 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
     pub fn touch(&mut self, key: &K, expires: Option<Timestamp>, now: Timestamp) -> bool {
         // update the timestamp and last-used field of a row without copying the
         // whole contents
-        let (old_expires, old_used) = match self._get_full_entry(key, now) {
+        let (old_key, old_expires, old_used) = match self._get_full_entry(key, now) {
             None => {
                 // just bail, it was never in here anyway
                 return false;
             }
             Some(full_entry) => {
                 // change it in-place
+                let old_key = (*full_entry).key.clone();
                 let old_expires = (*full_entry).expires;
                 let old_used = (*full_entry).used;
                 (*full_entry).expires = expires;
                 (*full_entry).used = now;
-                (old_expires, old_used)
+                (old_key, old_expires, old_used)
             }
         };
 
         // update our data structures
-        self._touch(key, old_expires, expires, old_used, now);
+        self._touch(old_key, old_expires, expires, old_used, now);
         true
     }
 
     fn _touch(&mut self,
-              key: &K,
+              key: Arc<K>,
               old_expires: Option<Timestamp>,
               new_expires: Option<Timestamp>,
               old_used: Timestamp,
               now: Timestamp) {
 
-        let k2 = Arc::new((*key).clone());
-
         if old_expires != new_expires {
             if let Some(old_expires_ts) = old_expires {
                 // if it expired before, we have to remove it
-                let old_expires_key = (old_expires_ts, k2.clone());
+                let old_expires_key = (old_expires_ts, key.clone());
                 self.expires.remove(&old_expires_key);
             }
 
             if let Some(expires_ts) = new_expires {
                 // if it expires now, we have to add it
-                let expires_key = (expires_ts, k2.clone());
+                let expires_key = (expires_ts, key.clone());
                 self.expires.insert(expires_key);
             }
         }
 
         if old_used != now {
-            let old_lru_key = (old_used, k2.clone());
+            let old_lru_key = (old_used, key.clone());
             self.lru.remove(&old_lru_key);
-            let new_lru_key = (now, k2.clone());
+            let new_lru_key = (now, key.clone());
             self.lru.insert(new_lru_key);
         }
     }
@@ -212,18 +219,20 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
             match self.map.get(key) {
                 None => None,
                 Some(entry) => {
-                    Some(((*entry).expires, (*entry).used, (*entry).weight))
+                    Some(((*entry).key.clone(),
+                          (*entry).expires,
+                          (*entry).used,
+                          (*entry).weight))
                 }
             }
         };
 
-        if let Some((expires, used, weight)) = found {
-            let k2 = Arc::new((*key).clone());
-            self.map.remove(key);
-            let lru_key = (used, k2.clone());
+        if let Some((old_key, expires, used, weight)) = found {
+            self.map.remove(&old_key);
+            let lru_key = (used, old_key.clone());
             self.lru.remove(&lru_key);
             if let Some(expires_ts) = expires {
-                let expires_key = (expires_ts, k2.clone());
+                let expires_key = (expires_ts, old_key.clone());
                 self.lru.remove(&expires_key);
             }
             self.weight -= weight;
@@ -303,7 +312,9 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
         let mut ret = Vec::new();
         for (ref key, ref value) in &self.map {
             if !expired((*value).expires, now) {
-                ret.push((*key).clone());
+                // more stars is better, right?
+                let copied = (*(**key)).clone();
+                ret.push(copied);
             }
         }
         ret.sort();
@@ -328,11 +339,12 @@ pub fn compute_weight<K: HasWeight, V: HasWeight>(key: &K, value: &V) -> Weight 
     // this isn't perfect because it ignores some hashtable and btreeset
     // overhead, but it's a pretty good guess at the memory usage of an entry
     let mut sum = 0;
-    sum += 3 * key.weight();
+    sum += key.weight();
+    sum += 3 * mem::size_of::<Arc<K>>();
     sum += value.weight();
     sum += mem::size_of::<Weight>();
-    sum += mem::size_of::<Timestamp>();
-    sum += mem::size_of::<Option<Timestamp>>();
+    sum += 2 * mem::size_of::<Timestamp>();
+    sum += 2 * mem::size_of::<Option<Timestamp>>();
     sum
 }
 
@@ -350,7 +362,7 @@ mod tests {
     const FUTURE: Timestamp = NOW + 1;
     const FUTURE2: Timestamp = NOW + 2;
     const PAST: Timestamp = NOW - 1;
-    const CAPACITY: Weight = 200;
+    const CAPACITY: Weight = 300;
 
     #[test]
     fn basic_set() {

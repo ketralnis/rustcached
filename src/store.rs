@@ -476,7 +476,7 @@ mod tests {
 
     #[test]
     pub fn set() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         let res = store.apply(ServerCommand::Setter {
             setter: SetterType::Set,
             key: b"foo",
@@ -490,7 +490,7 @@ mod tests {
 
     #[test]
     pub fn add_not_present() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         let res = store.apply(ServerCommand::Setter {
             setter: SetterType::Add,
             key: b"foo",
@@ -504,7 +504,7 @@ mod tests {
 
     #[test]
     pub fn add_present() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set("foo", "bar");
         let res = store.apply(ServerCommand::Setter {
             setter: SetterType::Add,
@@ -519,7 +519,7 @@ mod tests {
 
     #[test]
     pub fn replace_not_present() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         let res = store.apply(ServerCommand::Setter {
             setter: SetterType::Replace,
             key: b"foo",
@@ -533,7 +533,7 @@ mod tests {
 
     #[test]
     pub fn replace_present() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set("foo", "bar");
         let res = store.apply(ServerCommand::Setter {
             setter: SetterType::Replace,
@@ -548,7 +548,7 @@ mod tests {
 
     #[test]
     pub fn append_not_present() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         let res = store.apply(ServerCommand::Setter {
             setter: SetterType::Append,
             key: b"foo",
@@ -562,7 +562,7 @@ mod tests {
 
     #[test]
     pub fn append_present() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set("foo", "bar");
         let res = store.apply(ServerCommand::Setter {
             setter: SetterType::Append,
@@ -580,7 +580,7 @@ mod tests {
 
     #[test]
     pub fn prepend_not_present() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         let res = store.apply(ServerCommand::Setter {
             setter: SetterType::Prepend,
             key: b"foo",
@@ -594,7 +594,7 @@ mod tests {
 
     #[test]
     pub fn prepend_present() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set("foo", "bar");
         let res = store.apply(ServerCommand::Setter {
             setter: SetterType::Prepend,
@@ -612,7 +612,7 @@ mod tests {
 
     #[test]
     pub fn cas_not_present() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         let res = store.apply(ServerCommand::Setter {
             setter: SetterType::Cas(50),
             key: b"foo",
@@ -626,7 +626,7 @@ mod tests {
 
     #[test]
     pub fn cas_wrong() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set_cas("foo", "bar", 100);
         let res = store.apply(ServerCommand::Setter {
             setter: SetterType::Cas(200),
@@ -641,7 +641,7 @@ mod tests {
 
     #[test]
     pub fn cas_right() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set_cas("foo", "bar", 100);
         let res = store.apply(ServerCommand::Setter {
             setter: SetterType::Cas(100),
@@ -656,7 +656,7 @@ mod tests {
 
     #[test]
     pub fn cas_refreshes() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set_cas("foo", "bar", 100);
         store.simple_set("foo", "quux");
         let res = store.apply(ServerCommand::Setter {
@@ -672,7 +672,7 @@ mod tests {
 
     #[test]
     pub fn get() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set("foo", "bar");
         let res = store.apply(ServerCommand::Getter {
             getter: GetterType::Get,
@@ -691,7 +691,7 @@ mod tests {
 
     #[test]
     pub fn get_multi() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set("foo1", "bar1");
         store.simple_set("foo2", "bar2");
         let res = store.apply(ServerCommand::Getter {
@@ -717,7 +717,7 @@ mod tests {
 
     #[test]
     pub fn gets() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set("foo", "bar");
         let res = store.apply(ServerCommand::Getter {
             getter: GetterType::Get,
@@ -736,7 +736,7 @@ mod tests {
 
     #[test]
     pub fn gets_multi() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set_cas("foo1", "bar1", 100);
         store.simple_set_cas("foo2", "bar2", 100);
         let res = store.apply(ServerCommand::Getter {
@@ -762,7 +762,7 @@ mod tests {
 
     #[test]
     pub fn incr_present_and_good() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set("foo", "1");
         let res = store.apply(ServerCommand::Incrementer {
             incrementer: IncrementerType::Incr,
@@ -774,7 +774,7 @@ mod tests {
 
     #[test]
     pub fn incr_present_and_bad() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set("foo", "bar");
         let res = store.apply(ServerCommand::Incrementer {
             incrementer: IncrementerType::Incr,
@@ -789,7 +789,7 @@ mod tests {
 
     #[test]
     pub fn incr_not_present() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         let res = store.apply(ServerCommand::Incrementer {
             incrementer: IncrementerType::Incr,
             key: b"foo",
@@ -800,7 +800,7 @@ mod tests {
 
     #[test]
     pub fn incr_refreshes_cas() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set_cas("foo", "20", 100);
         let res = store.apply(ServerCommand::Incrementer {
             incrementer: IncrementerType::Incr,
@@ -822,7 +822,7 @@ mod tests {
 
     #[test]
     pub fn decr() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set("foo", "20");
         let res = store.apply(ServerCommand::Incrementer {
             incrementer: IncrementerType::Decr,
@@ -834,7 +834,7 @@ mod tests {
 
     #[test]
     pub fn decr_saturates() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set("foo", "20");
         let res = store.apply(ServerCommand::Incrementer {
             incrementer: IncrementerType::Decr,
@@ -846,7 +846,7 @@ mod tests {
 
     #[test]
     pub fn incr_wraps() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set("foo", "18446744073709551615");
         let res = store.apply(ServerCommand::Incrementer {
             incrementer: IncrementerType::Incr,
@@ -858,7 +858,7 @@ mod tests {
 
     #[test]
     pub fn delete_present() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set("foo", "bar");
         let res = store.apply(ServerCommand::Delete { key: b"foo" });
         assert_eq!(res, Response::DeletedResponse);
@@ -866,14 +866,14 @@ mod tests {
 
     #[test]
     pub fn delete_not_present() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         let res = store.apply(ServerCommand::Delete { key: b"foo" });
         assert_eq!(res, Response::NotFoundResponse);
     }
 
     #[test]
     pub fn touch_not_present() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
 
         let res = store.apply(ServerCommand::Touch {
             key: b"foo",
@@ -924,7 +924,7 @@ mod tests {
         // epoch seconds. It uses a heuristic magic number (MAGIC_DATE above) to
         // guess which one to use, so we have to make sure we properly support
         // this
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
 
         // will get the version marked cfg(test)!
         let now: Ttl = epoch_time();
@@ -967,7 +967,7 @@ mod tests {
 
     #[test]
     pub fn flushall() {
-        let mut store = Store::new(100);
+        let mut store = Store::new(200);
         store.simple_set("foo", "bar");
         assert_eq!(Some("bar".to_string()), store.simple_get("foo"));
 

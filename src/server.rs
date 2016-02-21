@@ -77,7 +77,12 @@ fn format_response(response: Response, socket: &mut Write) -> io::Result<()> {
         }
         Response::ClientErrorResponse{message} => {
             try!(socket.write(b"CLIENT_ERROR "));
-            try!(socket.write(message.as_bytes()));
+            try!(socket.write(message));
+            try!(socket.write(b"\r\n"));
+        },
+        Response::ServerError{message} => {
+            try!(socket.write(b"SERVER_ERROR "));
+            try!(socket.write(message));
             try!(socket.write(b"\r\n"));
         }
         Response::TooBig => {

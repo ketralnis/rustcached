@@ -98,7 +98,7 @@ named!(cmd_cas<&[u8], CommandConfig>,
         cas_unique: u64_digit ~
         noreply: chain!(space ~ x: tag!("noreply"), || {x})? ~
         crlf ~
-        payload: take!(bytes) ~ // assuming this is where the payload is
+        payload: take!(bytes) ~
         crlf,
         || {
             CommandConfig {

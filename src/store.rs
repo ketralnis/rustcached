@@ -127,7 +127,10 @@ pub enum Response<'a> {
     NotFoundResponse,
     ErrorResponse,
     ClientErrorResponse {
-        message: &'a str,
+        message: &'a [u8],
+    },
+    ServerError {
+        message: &'a [u8],
     },
     VersionResponse,
     TooBig,
@@ -371,7 +374,7 @@ impl Store {
                 match isr {
                     _IncrSubResult::NotFound => Response::NotFoundResponse,
                     _IncrSubResult::BadInt => Response::ClientErrorResponse {
-                        message: "cannot increment or decrement non-numeric value",
+                        message: b"cannot increment or decrement non-numeric value",
                     },
                     _IncrSubResult::NewValue(new_int, sttl, flags) => {
                         let re_str = new_int.to_string();
@@ -780,7 +783,7 @@ mod tests {
         });
         assert_eq!(res,
                    Response::ClientErrorResponse {
-                       message: "cannot increment or decrement non-numeric value",
+                       message: b"cannot increment or decrement non-numeric value",
                    });
     }
 

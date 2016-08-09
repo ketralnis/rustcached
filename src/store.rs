@@ -210,12 +210,14 @@ impl Store {
         let now = epoch_time(); // TODO lazy?
 
         match command {
-            ServerCommand::Setter{key: ckey, data: cdata, .. } if ckey.len() > MAX_KEY ||
-                                                                  cdata.len() > MAX_DATA => {
-                Response::TooBig
-            }
-            ServerCommand::Setter{setter, key: ckey, data: cdata,
-                                  ttl: cttl, flags} => {
+            ServerCommand::Setter { key: ckey, data: cdata, .. }
+                if ckey.len() > MAX_KEY ||
+                   cdata.len() > MAX_DATA => Response::TooBig,
+            ServerCommand::Setter { setter,
+                                    key: ckey,
+                                    data: cdata,
+                                    ttl: cttl,
+                                    flags } => {
                 let new_cas = self.make_cas_id(); // TODO too many IDs
                 let ttl = wrap_ttl(cttl, now);
                 let skey = ckey.to_vec();
@@ -240,9 +242,7 @@ impl Store {
                         self.store.set(skey, container(cdata, flags), ttl, now);
                         Response::Stored
                     }
-                    SetterType::Replace => {
-                        Response::NotStored
-                    }
+                    SetterType::Replace => Response::NotStored,
                     SetterType::Append if self.store.contains(&skey, now) => {
                         // this is pretty slow because we use immutable data in
                         // the lru. it's possible to make this faster by using
@@ -250,42 +250,52 @@ impl Store {
                         // directly modify, but then we'd need to make sure to
                         // keep the weights and stuff in sync and that's a pain
                         let (new_vec, old_ttl, old_flags) = {
-                            let current_entry = self.store.get_full_entry(&skey, now).unwrap();
+                            let current_entry =
+                                self.store.get_full_entry(&skey, now).unwrap();
                             let current_container = &current_entry.data;
-                            let new_size = cdata.len() + current_container.data.len();
+                            let new_size = cdata.len() +
+                                           current_container.data.len();
                             let mut new_vec = Vec::with_capacity(new_size);
                             new_vec.extend_from_slice(&current_container.data);
                             new_vec.extend_from_slice(cdata);
-                            (new_vec, current_entry.expires, current_container.flags)
+                            (new_vec,
+                             current_entry.expires,
+                             current_container.flags)
                         };
-                        self.store.set(skey, container(&new_vec, old_flags), old_ttl, now);
+                        self.store.set(skey,
+                                       container(&new_vec, old_flags),
+                                       old_ttl,
+                                       now);
                         Response::Stored
                     }
-                    SetterType::Append => {
-                        Response::NotStored
-                    }
+                    SetterType::Append => Response::NotStored,
                     SetterType::Prepend if self.store.contains(&skey, now) => {
                         let (new_vec, old_ttl, old_flags) = {
-                            let current_entry = self.store.get_full_entry(&skey, now).unwrap();
+                            let current_entry =
+                                self.store.get_full_entry(&skey, now).unwrap();
                             let current_container = &current_entry.data;
-                            let new_size = cdata.len() + current_container.data.len();
+                            let new_size = cdata.len() +
+                                           current_container.data.len();
                             let mut new_vec = Vec::with_capacity(new_size);
                             new_vec.extend_from_slice(cdata);
                             new_vec.extend_from_slice(&current_container.data);
-                            (new_vec, current_entry.expires, current_container.flags)
+                            (new_vec,
+                             current_entry.expires,
+                             current_container.flags)
                         };
-                        self.store.set(skey, container(&new_vec, old_flags), old_ttl, now);
+                        self.store.set(skey,
+                                       container(&new_vec, old_flags),
+                                       old_ttl,
+                                       now);
                         Response::Stored
                     }
-                    SetterType::Prepend => {
-                        Response::NotStored
-                    }
+                    SetterType::Prepend => Response::NotStored,
                     SetterType::Cas(_) if !self.store.contains(&skey, now) => {
                         Response::NotFound
                     }
                     SetterType::Cas(unique) if (self.store
-                                                    .fast_get(&skey, now)
-                                                    .map(|cont| cont.unique) ==
+                        .fast_get(&skey, now)
+                        .map(|cont| cont.unique) ==
                                                 Some(unique)) => {
                         self.store.set(skey, container(cdata, flags), ttl, now);
                         Response::Stored
@@ -297,7 +307,7 @@ impl Store {
                 }
             }
 
-            ServerCommand::Getter{getter, keys} => {
+            ServerCommand::Getter { getter, keys } => {
                 let mut found = Vec::with_capacity(keys.len());
                 for ckey in keys {
                     let skey = ckey.to_vec();
@@ -313,15 +323,11 @@ impl Store {
                 // and turn that into the right result format for the request
                 // (does this really have to be this repetetive?)
                 match getter {
-                    GetterType::Get => {
-                        Response::Data { responses: found }
-                    }
-                    GetterType::Gets => {
-                        Response::Gets { responses: found }
-                    }
+                    GetterType::Get => Response::Data { responses: found },
+                    GetterType::Gets => Response::Gets { responses: found },
                 }
             }
-            ServerCommand::Delete{key: ckey} => {
+            ServerCommand::Delete { key: ckey } => {
                 let skey = ckey.to_vec();
 
                 if self.store.delete(&skey) {
@@ -330,7 +336,7 @@ impl Store {
                     Response::NotFound
                 }
             }
-            ServerCommand::Touch{key: ckey, ttl: cttl} => {
+            ServerCommand::Touch { key: ckey, ttl: cttl } => {
                 let skey = ckey.to_vec();
                 let ttl = wrap_ttl(cttl, now);
 
@@ -341,7 +347,7 @@ impl Store {
                     Response::NotFound
                 }
             }
-            ServerCommand::Incrementer{incrementer, key: ckey, value} => {
+            ServerCommand::Incrementer { incrementer, key: ckey, value } => {
                 let new_cas = self.make_cas_id();
                 let skey = ckey.to_vec();
 
@@ -357,20 +363,28 @@ impl Store {
                                 let new_int = match incrementer {
                                     // memcached is saturating in the negative
                                     // direction
-                                    IncrementerType::Decr => current_int.saturating_sub(value),
+                                    IncrementerType::Decr => {
+                                        current_int.saturating_sub(value)
+                                    }
                                     // ...but wrapping in the positive direction
-                                    IncrementerType::Incr => current_int.wrapping_add(value),
+                                    IncrementerType::Incr => {
+                                        current_int.wrapping_add(value)
+                                    }
                                 };
-                                _IncrSubResult::NewValue(new_int, full_entry.expires, item.flags)
+                                _IncrSubResult::NewValue(new_int,
+                                                         full_entry.expires,
+                                                         item.flags)
                             }
                         }
                     }
                 };
                 match isr {
                     _IncrSubResult::NotFound => Response::NotFound,
-                    _IncrSubResult::BadInt => Response::ClientError {
-                        message: b"cannot increment or decrement non-numeric value",
-                    },
+                    _IncrSubResult::BadInt => {
+                        Response::ClientError {
+                            message: b"cannot increment or decrement non-numeric value",
+                        }
+                    }
                     _IncrSubResult::NewValue(new_int, sttl, flags) => {
                         let re_str = new_int.to_string();
                         let re_bytes = re_str.as_bytes();
@@ -408,7 +422,8 @@ impl Store {
             None => None,
             Some(container) => {
                 let ref container_data = container.data;
-                let container_as_string = String::from_utf8_lossy(&container_data);
+                let container_as_string =
+                    String::from_utf8_lossy(&container_data);
                 let mut new_string = String::new();
                 new_string.push_str(&container_as_string);
                 Some(new_string)
@@ -429,9 +444,7 @@ impl Store {
         let as_vec = as_bytes.to_vec();
         match self.store.get_full_entry(&as_vec, epoch_time()) {
             None => None,
-            Some(entry) => {
-                (*entry).expires
-            }
+            Some(entry) => (*entry).expires,
         }
     }
 
@@ -441,7 +454,10 @@ impl Store {
     }
 
     #[cfg(test)]
-    pub fn simple_set_cas(&mut self, key: &str, data: &str, unique: CasUnique) {
+    pub fn simple_set_cas(&mut self,
+                          key: &str,
+                          data: &str,
+                          unique: CasUnique) {
         let mut key_vec: Vec<u8> = Vec::new();
         key_vec.extend_from_slice(key.as_bytes());
         let mut data_vec: Vec<u8> = Vec::new();
@@ -456,12 +472,12 @@ impl Store {
                        Option::None,
                        epoch_time());
     }
-
 }
 
 impl lru::HasWeight for DataContainer {
     fn weight(&self) -> lru::Weight {
-        (self.data.capacity() + mem::size_of::<CasUnique>() + mem::size_of::<Flags>())
+        (self.data.capacity() + mem::size_of::<CasUnique>() +
+         mem::size_of::<Flags>())
     }
 }
 

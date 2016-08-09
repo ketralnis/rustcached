@@ -364,7 +364,9 @@ pub fn parse_size(size_str: &str) -> Option<usize> {
                 Some("m") => 1024 * 1024,
                 Some("g") => 1024 * 1024 * 1024,
                 Some("t") => 1024 * 1024 * 1024 * 1024,
-                bad_mult => unreachable!(format!("weird suffix {:?}", bad_mult)),
+                bad_mult => {
+                    unreachable!(format!("weird suffix {:?}", bad_mult))
+                }
             };
             Some(number * mult)
         }

@@ -38,9 +38,7 @@ pub fn main() {
     };
 
     let matches = match opts.parse(&args[1..]) {
-        Ok(m) => {
-            m
-        }
+        Ok(m) => m,
         Err(f) => {
             println_stderr!("{}", f);
             return print_usage_and_die(1);

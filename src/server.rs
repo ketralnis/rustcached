@@ -16,7 +16,7 @@ pub const VERSION: &'static [u8] = b"0.1.0";
 
 fn format_response(response: Response, socket: &mut Write) -> io::Result<()> {
     match response {
-        Response::Data{responses} => {
+        Response::Data { responses } => {
             for response in &responses {
                 try!(socket.write(b"VALUE "));
                 try!(socket.write(response.key));
@@ -30,7 +30,7 @@ fn format_response(response: Response, socket: &mut Write) -> io::Result<()> {
             }
             try!(socket.write(b"END\r\n"));
         }
-        Response::Gets{responses} => {
+        Response::Gets { responses } => {
             for response in &responses {
                 try!(socket.write(b"VALUE "));
                 try!(socket.write(response.key));
@@ -47,7 +47,7 @@ fn format_response(response: Response, socket: &mut Write) -> io::Result<()> {
             }
             try!(socket.write(b"END\r\n"));
         }
-        Response::Incr{value} => {
+        Response::Incr { value } => {
             try!(socket.write(format!("{}", value).as_bytes()));
             try!(socket.write(b"\r\n"));
         }
@@ -75,7 +75,7 @@ fn format_response(response: Response, socket: &mut Write) -> io::Result<()> {
         Response::Error => {
             try!(socket.write(b"ERROR\r\n"));
         }
-        Response::ClientError{message} => {
+        Response::ClientError { message } => {
             try!(socket.write(b"CLIENT_ERROR "));
             try!(socket.write(message));
             try!(socket.write(b"\r\n"));
@@ -102,7 +102,9 @@ fn format_response(response: Response, socket: &mut Write) -> io::Result<()> {
     Ok(())
 }
 
-fn client(locked_store: Arc<Mutex<Store>>, mut socket: TcpStream, verbose: bool) {
+fn client(locked_store: Arc<Mutex<Store>>,
+          mut socket: TcpStream,
+          verbose: bool) {
     if verbose {
         println!("client connect");
     }
@@ -142,7 +144,8 @@ fn client(locked_store: Arc<Mutex<Store>>, mut socket: TcpStream, verbose: bool)
 
                 match parser::parse_command(&parse_state.to_vec()) { // TODO copy
                     parser::IResult::Done(remaining, command_config) => {
-                        let CommandConfig {should_reply, command} = command_config;
+                        let CommandConfig { should_reply, command } =
+                            command_config;
 
                         let response = match command {
                             ServerCommand::Quit => {
@@ -158,7 +161,8 @@ fn client(locked_store: Arc<Mutex<Store>>, mut socket: TcpStream, verbose: bool)
                             }
                             _ => {
                                 // all others must be sent to the store
-                                let mut unlocked_store = locked_store.lock().unwrap();
+                                let mut unlocked_store = locked_store.lock()
+                                    .unwrap();
                                 unlocked_store.apply(command)
                             }
                         };
@@ -194,7 +198,9 @@ fn client(locked_store: Arc<Mutex<Store>>, mut socket: TcpStream, verbose: bool)
     }
 }
 
-fn start_client(locked_store: Arc<Mutex<Store>>, socket: TcpStream, verbose: bool) {
+fn start_client(locked_store: Arc<Mutex<Store>>,
+                socket: TcpStream,
+                verbose: bool) {
     spawn(move || client(locked_store, socket, verbose));
 }
 

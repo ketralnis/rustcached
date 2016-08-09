@@ -16,7 +16,7 @@ pub const VERSION: &'static [u8] = b"0.1.0";
 
 fn format_response(response: Response, socket: &mut Write) -> io::Result<()> {
     match response {
-        Response::DataResponse{responses} => {
+        Response::Data{responses} => {
             for response in &responses {
                 try!(socket.write(b"VALUE "));
                 try!(socket.write(response.key));
@@ -30,7 +30,7 @@ fn format_response(response: Response, socket: &mut Write) -> io::Result<()> {
             }
             try!(socket.write(b"END\r\n"));
         }
-        Response::GetsResponse{responses} => {
+        Response::Gets{responses} => {
             for response in &responses {
                 try!(socket.write(b"VALUE "));
                 try!(socket.write(response.key));
@@ -47,35 +47,35 @@ fn format_response(response: Response, socket: &mut Write) -> io::Result<()> {
             }
             try!(socket.write(b"END\r\n"));
         }
-        Response::IncrResponse{value} => {
+        Response::Incr{value} => {
             try!(socket.write(format!("{}", value).as_bytes()));
             try!(socket.write(b"\r\n"));
         }
-        Response::DeletedResponse => {
+        Response::Deleted => {
             try!(socket.write(b"DELETED\r\n"));
         }
-        Response::TouchedResponse => {
+        Response::Touched => {
             try!(socket.write(b"TOUCHED\r\n"));
         }
-        Response::OkResponse => {
+        Response::Ok => {
             try!(socket.write(b"OK\r\n"));
         }
-        Response::StoredResponse => {
+        Response::Stored => {
             try!(socket.write(b"STORED\r\n"));
         }
-        Response::NotStoredResponse => {
+        Response::NotStored => {
             try!(socket.write(b"NOT_STORED\r\n"));
         }
-        Response::ExistsResponse => {
+        Response::Exists => {
             try!(socket.write(b"EXISTS\r\n"));
         }
-        Response::NotFoundResponse => {
+        Response::NotFound => {
             try!(socket.write(b"NOT_FOUND\r\n"));
         }
-        Response::ErrorResponse => {
+        Response::Error => {
             try!(socket.write(b"ERROR\r\n"));
         }
-        Response::ClientErrorResponse{message} => {
+        Response::ClientError{message} => {
             try!(socket.write(b"CLIENT_ERROR "));
             try!(socket.write(message));
             try!(socket.write(b"\r\n"));
@@ -88,7 +88,7 @@ fn format_response(response: Response, socket: &mut Write) -> io::Result<()> {
         Response::TooBig => {
             try!(socket.write(b"SERVER_ERROR object too large for cache"));
         }
-        Response::VersionResponse => {
+        Response::Version => {
             try!(socket.write(b"VERSION "));
             try!(socket.write(NAME));
             try!(socket.write(b" "));
@@ -154,7 +154,7 @@ fn client(locked_store: Arc<Mutex<Store>>, mut socket: TcpStream, verbose: bool)
                                     println!("bad client command: {:?}",
                                              String::from_utf8_lossy(text))
                                 }
-                                Response::ErrorResponse
+                                Response::Error
                             }
                             _ => {
                                 // all others must be sent to the store
@@ -176,7 +176,7 @@ fn client(locked_store: Arc<Mutex<Store>>, mut socket: TcpStream, verbose: bool)
                         }
                         // TODO this does all sorts of copying
                         parse_state.clear();
-                        parse_state.extend_from_slice(&remaining);
+                        parse_state.extend_from_slice(remaining);
                     }
                     parser::IResult::Error(err) => {
                         if verbose {

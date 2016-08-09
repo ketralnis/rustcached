@@ -106,39 +106,39 @@ pub struct SingleGetResponse<'a> {
 
 #[derive(Debug,PartialEq,Eq)]
 pub enum Response<'a> {
-    // DataResponse and GetsResponse share the SingleGetResponse format for
-    // simplicity. If copying a bunch of unneeded unique values turns out to be
-    // a problem we can revisit but this makes the response builder much simpler
-    DataResponse {
+    // Data and Gets share the SingleGetResponse format for simplicity. If
+    // copying a bunch of unneeded unique values turns out to be a problem we
+    // can revisit but this makes the response builder much simpler
+    Data {
         responses: Vec<SingleGetResponse<'a>>,
     },
-    GetsResponse {
+    Gets {
         responses: Vec<SingleGetResponse<'a>>,
     },
-    IncrResponse {
+    Incr {
         value: IncrValue,
     },
-    DeletedResponse,
-    TouchedResponse,
-    OkResponse,
-    StoredResponse,
-    NotStoredResponse,
-    ExistsResponse,
-    NotFoundResponse,
-    ErrorResponse,
-    ClientErrorResponse {
+    Deleted,
+    Touched,
+    Ok,
+    Stored,
+    NotStored,
+    Exists,
+    NotFound,
+    Error,
+    ClientError {
         message: &'a [u8],
     },
     ServerError {
         message: &'a [u8],
     },
-    VersionResponse,
+    Version,
     TooBig,
 }
 
 fn forgetful_parse_int(current_data: &StoredData) -> Option<IncrValue> {
     // try to interpret it as an int
-    let as_string = str::from_utf8(&current_data);
+    let as_string = str::from_utf8(current_data);
     if as_string.is_err() {
         return None;
     }
@@ -148,7 +148,7 @@ fn forgetful_parse_int(current_data: &StoredData) -> Option<IncrValue> {
         return None;
     }
 
-    return Option::Some(as_int.unwrap());
+    Option::Some(as_int.unwrap())
 }
 
 enum _IncrSubResult {
@@ -229,23 +229,19 @@ impl Store {
                 };
 
                 match setter {
-                    SetterType::Set => {
-                        self.store.set(skey, container(cdata, flags), ttl, now);
-                        Response::StoredResponse
-                    }
                     SetterType::Add if self.store.contains(&skey, now) => {
-                        Response::NotStoredResponse
+                        Response::NotStored
                     }
-                    SetterType::Add => {
+                    SetterType::Add | SetterType::Set => {
                         self.store.set(skey, container(cdata, flags), ttl, now);
-                        Response::StoredResponse
+                        Response::Stored
                     }
                     SetterType::Replace if self.store.contains(&skey, now) => {
                         self.store.set(skey, container(cdata, flags), ttl, now);
-                        Response::StoredResponse
+                        Response::Stored
                     }
                     SetterType::Replace => {
-                        Response::NotStoredResponse
+                        Response::NotStored
                     }
                     SetterType::Append if self.store.contains(&skey, now) => {
                         // this is pretty slow because we use immutable data in
@@ -255,7 +251,7 @@ impl Store {
                         // keep the weights and stuff in sync and that's a pain
                         let (new_vec, old_ttl, old_flags) = {
                             let current_entry = self.store.get_full_entry(&skey, now).unwrap();
-                            let ref current_container = current_entry.data;
+                            let current_container = &current_entry.data;
                             let new_size = cdata.len() + current_container.data.len();
                             let mut new_vec = Vec::with_capacity(new_size);
                             new_vec.extend_from_slice(&current_container.data);
@@ -263,15 +259,15 @@ impl Store {
                             (new_vec, current_entry.expires, current_container.flags)
                         };
                         self.store.set(skey, container(&new_vec, old_flags), old_ttl, now);
-                        Response::StoredResponse
+                        Response::Stored
                     }
                     SetterType::Append => {
-                        Response::NotStoredResponse
+                        Response::NotStored
                     }
                     SetterType::Prepend if self.store.contains(&skey, now) => {
                         let (new_vec, old_ttl, old_flags) = {
                             let current_entry = self.store.get_full_entry(&skey, now).unwrap();
-                            let ref current_container = current_entry.data;
+                            let current_container = &current_entry.data;
                             let new_size = cdata.len() + current_container.data.len();
                             let mut new_vec = Vec::with_capacity(new_size);
                             new_vec.extend_from_slice(cdata);
@@ -279,24 +275,24 @@ impl Store {
                             (new_vec, current_entry.expires, current_container.flags)
                         };
                         self.store.set(skey, container(&new_vec, old_flags), old_ttl, now);
-                        Response::StoredResponse
+                        Response::Stored
                     }
                     SetterType::Prepend => {
-                        Response::NotStoredResponse
+                        Response::NotStored
                     }
                     SetterType::Cas(_) if !self.store.contains(&skey, now) => {
-                        Response::NotFoundResponse
+                        Response::NotFound
                     }
                     SetterType::Cas(unique) if (self.store
                                                     .fast_get(&skey, now)
                                                     .map(|cont| cont.unique) ==
                                                 Some(unique)) => {
                         self.store.set(skey, container(cdata, flags), ttl, now);
-                        Response::StoredResponse
+                        Response::Stored
                     }
                     SetterType::Cas(_) => {
                         // n.b. failed cas updates don't update the lru
-                        Response::ExistsResponse
+                        Response::Exists
                     }
                 }
             }
@@ -318,10 +314,10 @@ impl Store {
                 // (does this really have to be this repetetive?)
                 match getter {
                     GetterType::Get => {
-                        Response::DataResponse { responses: found }
+                        Response::Data { responses: found }
                     }
                     GetterType::Gets => {
-                        Response::GetsResponse { responses: found }
+                        Response::Gets { responses: found }
                     }
                 }
             }
@@ -329,21 +325,20 @@ impl Store {
                 let skey = ckey.to_vec();
 
                 if self.store.delete(&skey) {
-                    Response::DeletedResponse
+                    Response::Deleted
                 } else {
-                    Response::NotFoundResponse
+                    Response::NotFound
                 }
             }
             ServerCommand::Touch{key: ckey, ttl: cttl} => {
                 let skey = ckey.to_vec();
                 let ttl = wrap_ttl(cttl, now);
 
-                match self.store.contains(&skey, now) {
-                    false => Response::NotFoundResponse,
-                    true => {
-                        self.store.touch(&skey, ttl, now);
-                        Response::TouchedResponse
-                    }
+                if self.store.contains(&skey, now) {
+                    self.store.touch(&skey, ttl, now);
+                    Response::Touched
+                } else {
+                    Response::NotFound
                 }
             }
             ServerCommand::Incrementer{incrementer, key: ckey, value} => {
@@ -353,9 +348,9 @@ impl Store {
                 let isr = match self.store.get_full_entry(&skey, now) {
                     None => _IncrSubResult::NotFound,
                     Some(full_entry) => {
-                        let ref item = (*full_entry).data;
-                        let ref current_data = (*item).data;
-                        let as_int = forgetful_parse_int(&current_data);
+                        let item = &(*full_entry).data;
+                        let current_data = &(*item).data;
+                        let as_int = forgetful_parse_int(current_data);
                         match as_int {
                             None => _IncrSubResult::BadInt,
                             Some(current_int) => {
@@ -372,8 +367,8 @@ impl Store {
                     }
                 };
                 match isr {
-                    _IncrSubResult::NotFound => Response::NotFoundResponse,
-                    _IncrSubResult::BadInt => Response::ClientErrorResponse {
+                    _IncrSubResult::NotFound => Response::NotFound,
+                    _IncrSubResult::BadInt => Response::ClientError {
                         message: b"cannot increment or decrement non-numeric value",
                     },
                     _IncrSubResult::NewValue(new_int, sttl, flags) => {
@@ -386,18 +381,18 @@ impl Store {
                             unique: new_cas,
                         };
                         self.store.set(skey, new_container, sttl, now);
-                        Response::IncrResponse { value: new_int }
+                        Response::Incr { value: new_int }
                     }
                 }
             }
             ServerCommand::FlushAll => {
                 self.store.clear(); // weeeeee
-                Response::OkResponse
+                Response::Ok
             }
-            ServerCommand::Bad(_) => Response::ErrorResponse,
-            ServerCommand::Version => Response::VersionResponse,
+            ServerCommand::Bad(_) => Response::Error,
+            ServerCommand::Version => Response::Version,
             // we ignore this, we just support it to make memcapable happy
-            ServerCommand::Verbosity => Response::OkResponse,
+            ServerCommand::Verbosity => Response::Ok,
             ServerCommand::Quit => {
                 unreachable!("this should have been handled by the server dispatch loop")
             }
@@ -466,7 +461,7 @@ impl Store {
 
 impl lru::HasWeight for DataContainer {
     fn weight(&self) -> lru::Weight {
-        (1 * self.data.capacity() + mem::size_of::<CasUnique>() + mem::size_of::<Flags>())
+        (self.data.capacity() + mem::size_of::<CasUnique>() + mem::size_of::<Flags>())
     }
 }
 
@@ -484,7 +479,7 @@ mod tests {
             flags: 0,
             ttl: 0,
         });
-        assert_eq!(Response::StoredResponse, res);
+        assert_eq!(Response::Stored, res);
         assert_eq!(Some("bar".to_string()), store.simple_get("foo"));
     }
 
@@ -498,7 +493,7 @@ mod tests {
             flags: 0,
             ttl: 0,
         });
-        assert_eq!(Response::StoredResponse, res);
+        assert_eq!(Response::Stored, res);
         assert_eq!(Some("bar".to_string()), store.simple_get("foo"));
     }
 
@@ -513,7 +508,7 @@ mod tests {
             flags: 0,
             ttl: 0,
         });
-        assert_eq!(Response::NotStoredResponse, res);
+        assert_eq!(Response::NotStored, res);
         assert_eq!(Some("bar".to_string()), store.simple_get("foo"));
     }
 
@@ -527,7 +522,7 @@ mod tests {
             flags: 0,
             ttl: 0,
         });
-        assert_eq!(Response::NotStoredResponse, res);
+        assert_eq!(Response::NotStored, res);
         assert_eq!(None, store.simple_get("foo"));
     }
 
@@ -542,7 +537,7 @@ mod tests {
             flags: 0,
             ttl: 0,
         });
-        assert_eq!(Response::StoredResponse, res);
+        assert_eq!(Response::Stored, res);
         assert_eq!(Some("baz".to_string()), store.simple_get("foo"));
     }
 
@@ -556,7 +551,7 @@ mod tests {
             flags: 0,
             ttl: 0,
         });
-        assert_eq!(Response::NotStoredResponse, res);
+        assert_eq!(Response::NotStored, res);
         assert_eq!(None, store.simple_get("foo"));
     }
 
@@ -571,7 +566,7 @@ mod tests {
             flags: 12,
             ttl: 34,
         });
-        assert_eq!(Response::StoredResponse, res);
+        assert_eq!(Response::Stored, res);
         assert_eq!(Some("barbaz".to_string()), store.simple_get("foo"));
         // make sure we didn't update the flags or ttl
         assert_eq!(Some(0), store.simple_get_flags("foo"));
@@ -588,7 +583,7 @@ mod tests {
             flags: 0,
             ttl: 0,
         });
-        assert_eq!(Response::NotStoredResponse, res);
+        assert_eq!(Response::NotStored, res);
         assert_eq!(None, store.simple_get("foo"));
     }
 
@@ -603,7 +598,7 @@ mod tests {
             flags: 0,
             ttl: 0,
         });
-        assert_eq!(Response::StoredResponse, res);
+        assert_eq!(Response::Stored, res);
         assert_eq!(Some("bazbar".to_string()), store.simple_get("foo"));
         // make sure we didn't update the flags or ttl
         assert_eq!(Some(0), store.simple_get_flags("foo"));
@@ -620,7 +615,7 @@ mod tests {
             flags: 0,
             ttl: 0,
         });
-        assert_eq!(Response::NotFoundResponse, res);
+        assert_eq!(Response::NotFound, res);
         assert_eq!(None, store.simple_get("foo"));
     }
 
@@ -635,7 +630,7 @@ mod tests {
             flags: 0,
             ttl: 0,
         });
-        assert_eq!(Response::ExistsResponse, res);
+        assert_eq!(Response::Exists, res);
         assert_eq!(Some("bar".to_string()), store.simple_get("foo"));
     }
 
@@ -650,7 +645,7 @@ mod tests {
             flags: 0,
             ttl: 0,
         });
-        assert_eq!(Response::StoredResponse, res);
+        assert_eq!(Response::Stored, res);
         assert_eq!(Some("baz".to_string()), store.simple_get("foo"));
     }
 
@@ -666,7 +661,7 @@ mod tests {
             flags: 0,
             ttl: 0,
         });
-        assert_eq!(Response::ExistsResponse, res);
+        assert_eq!(Response::Exists, res);
         assert_eq!(Some("quux".to_string()), store.simple_get("foo"));
     }
 
@@ -679,7 +674,7 @@ mod tests {
             keys: vec!["foo".as_bytes()],
         });
         assert_eq!(res,
-                   Response::DataResponse {
+                   Response::Data {
                        responses: vec![SingleGetResponse {
                                            key: "foo".as_bytes(),
                                            data: b("bar"),
@@ -699,7 +694,7 @@ mod tests {
             keys: vec!["foo1".as_bytes(), "foo2".as_bytes(), "foo3".as_bytes()],
         });
         assert_eq!(res,
-                   Response::DataResponse {
+                   Response::Data {
                        responses: vec![SingleGetResponse {
                                            key: "foo1".as_bytes(),
                                            data: b("bar1"),
@@ -724,7 +719,7 @@ mod tests {
             keys: vec!["foo".as_bytes()],
         });
         assert_eq!(res,
-                   Response::DataResponse {
+                   Response::Data {
                        responses: vec![SingleGetResponse {
                                            key: "foo".as_bytes(),
                                            data: b("bar"),
@@ -744,7 +739,7 @@ mod tests {
             keys: vec!["foo1".as_bytes(), "foo2".as_bytes(), "foo3".as_bytes()],
         });
         assert_eq!(res,
-                   Response::GetsResponse {
+                   Response::Gets {
                        responses: vec![SingleGetResponse {
                                            key: "foo1".as_bytes(),
                                            data: b("bar1"),
@@ -769,7 +764,7 @@ mod tests {
             key: b"foo",
             value: 5,
         });
-        assert_eq!(res, Response::IncrResponse { value: 6 });
+        assert_eq!(res, Response::Incr { value: 6 });
     }
 
     #[test]
@@ -782,7 +777,7 @@ mod tests {
             value: 5,
         });
         assert_eq!(res,
-                   Response::ClientErrorResponse {
+                   Response::ClientError {
                        message: b"cannot increment or decrement non-numeric value",
                    });
     }
@@ -795,7 +790,7 @@ mod tests {
             key: b"foo",
             value: 5,
         });
-        assert_eq!(res, Response::NotFoundResponse);
+        assert_eq!(res, Response::NotFound);
     }
 
     #[test]
@@ -807,7 +802,7 @@ mod tests {
             key: b"foo",
             value: 5,
         });
-        assert_eq!(Response::IncrResponse { value: 25 }, res);
+        assert_eq!(Response::Incr { value: 25 }, res);
         let res = store.apply(ServerCommand::Setter {
             setter: SetterType::Cas(100),
             key: b"foo",
@@ -815,7 +810,7 @@ mod tests {
             flags: 0,
             ttl: 0,
         });
-        assert_eq!(Response::ExistsResponse, res);
+        assert_eq!(Response::Exists, res);
         assert_eq!(Some("25".to_string()), store.simple_get("foo"));
     }
 
@@ -829,7 +824,7 @@ mod tests {
             key: b"foo",
             value: 5,
         });
-        assert_eq!(res, Response::IncrResponse { value: 15 });
+        assert_eq!(res, Response::Incr { value: 15 });
     }
 
     #[test]
@@ -841,7 +836,7 @@ mod tests {
             key: b"foo",
             value: 100,
         });
-        assert_eq!(res, Response::IncrResponse { value: 0 });
+        assert_eq!(res, Response::Incr { value: 0 });
     }
 
     #[test]
@@ -853,7 +848,7 @@ mod tests {
             key: b"foo",
             value: 2,
         });
-        assert_eq!(res, Response::IncrResponse { value: 1 });
+        assert_eq!(res, Response::Incr { value: 1 });
     }
 
     #[test]
@@ -861,14 +856,14 @@ mod tests {
         let mut store = Store::new(200);
         store.simple_set("foo", "bar");
         let res = store.apply(ServerCommand::Delete { key: b"foo" });
-        assert_eq!(res, Response::DeletedResponse);
+        assert_eq!(res, Response::Deleted);
     }
 
     #[test]
     pub fn delete_not_present() {
         let mut store = Store::new(200);
         let res = store.apply(ServerCommand::Delete { key: b"foo" });
-        assert_eq!(res, Response::NotFoundResponse);
+        assert_eq!(res, Response::NotFound);
     }
 
     #[test]
@@ -879,7 +874,7 @@ mod tests {
             key: b"foo",
             ttl: 0,
         });
-        assert_eq!(Response::NotFoundResponse, res);
+        assert_eq!(Response::NotFound, res);
         assert_eq!(None, store.simple_get("foo"));
     }
 
@@ -897,7 +892,7 @@ mod tests {
             key: b"foo",
             ttl: 0,
         });
-        assert_eq!(Response::TouchedResponse, res);
+        assert_eq!(Response::Touched, res);
         assert_eq!(store.simple_get_ttl("foo"), None);
         assert_eq!(Some("bar".to_string()), store.simple_get("foo"));
 
@@ -905,7 +900,7 @@ mod tests {
             key: b"foo",
             ttl: 100,
         });
-        assert_eq!(Response::TouchedResponse, res);
+        assert_eq!(Response::Touched, res);
         assert_eq!(Some("bar".to_string()), store.simple_get("foo"));
         assert_eq!(store.simple_get_ttl("foo"), Some(now + 100));
 
@@ -914,7 +909,7 @@ mod tests {
             key: b"foo",
             ttl: 0,
         });
-        assert_eq!(Response::TouchedResponse, res);
+        assert_eq!(Response::Touched, res);
         assert_eq!(store.simple_get_ttl("foo"), None);
     }
 
@@ -941,7 +936,7 @@ mod tests {
             key: b"foo",
             ttl: 100,
         });
-        assert_eq!(Response::TouchedResponse, res);
+        assert_eq!(Response::Touched, res);
         assert_eq!(Some("bar".to_string()), store.simple_get("foo"));
         assert_eq!(store.simple_get_ttl("foo"), Some(now + 100));
 
@@ -949,7 +944,7 @@ mod tests {
             key: b"foo",
             ttl: now + 200,
         });
-        assert_eq!(Response::TouchedResponse, res);
+        assert_eq!(Response::Touched, res);
         assert_eq!(Some("bar".to_string()), store.simple_get("foo"));
         assert_eq!(store.simple_get_ttl("foo"), Some(now + 200));
 
@@ -960,7 +955,7 @@ mod tests {
             ttl: now + 300,
             flags: 0,
         });
-        assert_eq!(Response::StoredResponse, res);
+        assert_eq!(Response::Stored, res);
         assert_eq!(Some("bar".to_string()), store.simple_get("foo"));
         assert_eq!(store.simple_get_ttl("foo"), Some(now + 300));
     }
@@ -972,7 +967,7 @@ mod tests {
         assert_eq!(Some("bar".to_string()), store.simple_get("foo"));
 
         let res = store.apply(ServerCommand::FlushAll);
-        assert_eq!(res, Response::OkResponse);
+        assert_eq!(res, Response::Ok);
 
         assert_eq!(None, store.simple_get("foo"));
     }

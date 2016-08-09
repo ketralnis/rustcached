@@ -144,7 +144,7 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
         }
 
         // TODO Store always ignores this return value. Do we care?
-        return true;
+        true
     }
 
     pub fn fast_get(&self, key: &K, now: Timestamp) -> Option<&V> {
@@ -262,7 +262,7 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
         let expired_key = {
             // check the expiration queue for stuff that's already expired that
             // we can just delete
-            let ref maybe_expirable = self.expires;
+            let maybe_expirable = &self.expires;
             let mut maybe_expirable = maybe_expirable.into_iter();
             let maybe_expirable = maybe_expirable.next();
             match maybe_expirable {
@@ -285,7 +285,7 @@ impl<K: HasWeight + Ord + Hash + Clone, V: HasWeight> LruCache<K, V> {
 
         // otherwise we have to use the LRU
         let lru_key = {
-            let ref lru = self.lru;
+            let lru = &self.lru;
             let mut lru = lru.into_iter();
             let lru = lru.next();
             match lru {
@@ -332,7 +332,7 @@ fn expired(timestamp: Option<Timestamp>, now: Timestamp) -> bool {
 }
 
 fn _expired(timestamp: Timestamp, now: Timestamp) -> bool {
-    return timestamp < now;
+    timestamp < now
 }
 
 pub fn compute_weight<K: HasWeight, V: HasWeight>(key: &K, value: &V) -> Weight {
